@@ -1,11 +1,174 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>jc2</title>
-  </head>
-  <body>
-    <p>jc2 i changed this</p>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Snake</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #111;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: monospace;
+      color: #eee;
+    }
+    h1 { font-size: 2rem; margin-bottom: 0.5rem; letter-spacing: 4px; color: #4ade80; }
+    #score { font-size: 1.1rem; margin-bottom: 1rem; color: #aaa; }
+    canvas {
+      border: 2px solid #333;
+      background: #1a1a1a;
+    }
+    #msg {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      color: #555;
+    }
+    #overlay {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      pointer-events: none;
+    }
+    #overlay h2 { font-size: 1.8rem; color: #f87171; }
+    #overlay p  { color: #aaa; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>SNAKE</h1>
+  <div id="score">Score: 0 &nbsp;|&nbsp; Best: 0</div>
+  <div style="position:relative">
+    <canvas id="c" width="400" height="400"></canvas>
+    <div id="overlay">
+      <h2 id="ol-title">SNAKE</h2>
+      <p id="ol-sub">Press any arrow key to start</p>
+    </div>
+  </div>
+  <div id="msg">Arrow keys or WASD to move</div>
+
+<script>
+const COLS = 20, ROWS = 20, CELL = 20;
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const overlay = document.getElementById('overlay');
+const olTitle = document.getElementById('ol-title');
+const olSub   = document.getElementById('ol-sub');
+
+let snake, dir, nextDir, food, score, best = 0, state = 'idle', timer;
+
+function rand(n) { return Math.floor(Math.random() * n); }
+
+function placeFood() {
+  const occupied = new Set(snake.map(([x,y]) => `${x},${y}`));
+  let fx, fy;
+  do { fx = rand(COLS); fy = rand(ROWS); } while (occupied.has(`${fx},${fy}`));
+  food = [fx, fy];
+}
+
+function init() {
+  snake = [[10,10],[9,10],[8,10]];
+  dir = [1, 0];
+  nextDir = [1, 0];
+  score = 0;
+  placeFood();
+  state = 'running';
+  overlay.style.display = 'none';
+  clearInterval(timer);
+  timer = setInterval(tick, 100);
+}
+
+function tick() {
+  dir = nextDir;
+  const head = [snake[0][0] + dir[0], snake[0][1] + dir[1]];
+
+  // Wall collision
+  if (head[0] < 0 || head[0] >= COLS || head[1] < 0 || head[1] >= ROWS) return gameOver();
+  // Self collision
+  if (snake.some(([x,y]) => x === head[0] && y === head[1])) return gameOver();
+
+  snake.unshift(head);
+  if (head[0] === food[0] && head[1] === food[1]) {
+    score++;
+    if (score > best) best = score;
+    scoreEl.textContent = `Score: ${score}  |  Best: ${best}`;
+    placeFood();
+  } else {
+    snake.pop();
+  }
+  draw();
+}
+
+function gameOver() {
+  clearInterval(timer);
+  state = 'dead';
+  olTitle.textContent = 'GAME OVER';
+  olSub.textContent = `Score: ${score} — Press any arrow to restart`;
+  overlay.style.display = 'flex';
+  draw();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Grid dots
+  ctx.fillStyle = '#222';
+  for (let x = 0; x < COLS; x++)
+    for (let y = 0; y < ROWS; y++)
+      ctx.fillRect(x * CELL + 9, y * CELL + 9, 2, 2);
+
+  // Food
+  ctx.fillStyle = '#f87171';
+  ctx.beginPath();
+  ctx.arc(food[0]*CELL + CELL/2, food[1]*CELL + CELL/2, CELL/2 - 2, 0, Math.PI*2);
+  ctx.fill();
+
+  // Snake
+  snake.forEach(([x,y], i) => {
+    const t = 1 - i / snake.length;
+    ctx.fillStyle = `hsl(${140 - i * 2}, ${60 + t*30}%, ${35 + t*25}%)`;
+    ctx.beginPath();
+    ctx.roundRect(x*CELL + 1, y*CELL + 1, CELL - 2, CELL - 2, 4);
+    ctx.fill();
+  });
+
+  // Eyes on head
+  const [hx, hy] = snake[0];
+  ctx.fillStyle = '#fff';
+  const ex = dir[0] === 0 ? 5 : (dir[0] > 0 ? 13 : 7);
+  const ey = dir[1] === 0 ? 5 : (dir[1] > 0 ? 13 : 7);
+  ctx.beginPath(); ctx.arc(hx*CELL+ex,   hy*CELL+ey,   2.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(hx*CELL+CELL-ex, hy*CELL+ey, 2.5, 0, Math.PI*2); ctx.fill();
+}
+
+const DIRS = {
+  ArrowUp:   [0,-1], ArrowDown:  [0,1],
+  ArrowLeft: [-1,0], ArrowRight: [1,0],
+  w:[0,-1], s:[0,1], a:[-1,0], d:[1,0],
+  W:[0,-1], S:[0,1], A:[-1,0], D:[1,0],
+};
+
+document.addEventListener('keydown', e => {
+  const d = DIRS[e.key];
+  if (!d) return;
+  e.preventDefault();
+  if (state === 'idle' || state === 'dead') { init(); return; }
+  // Prevent reversing
+  if (d[0] + dir[0] !== 0 || d[1] + dir[1] !== 0) nextDir = d;
+});
+
+// Initial draw
+snake = [[10,10],[9,10],[8,10]];
+dir = [1,0];
+food = [15, 10];
+draw();
+overlay.style.display = 'flex';
+</script>
+</body>
 </html>
